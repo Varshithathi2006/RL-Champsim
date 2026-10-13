@@ -15,8 +15,8 @@ override PREFETCH_ROOT += $(addsuffix /prefetcher,$(MODULE_ROOT))
 override REPLACEMENT_ROOT += $(addsuffix /replacement,$(MODULE_ROOT))
 
 # vcpkg integration
-TRIPLET_DIR = $(patsubst %/,%,$(firstword $(filter-out $(ROOT_DIR)/vcpkg_installed/vcpkg/, $(wildcard $(ROOT_DIR)/vcpkg_installed/*/))))
-override CPPFLAGS += -I$(OBJ_ROOT)
+TRIPLET_DIR = vcpkg_installed/x64-linux
+override CPPFLAGS += -I$(OBJ_ROOT) -Iinc -I$(TRIPLET_DIR)/include
 override LDFLAGS  += -L$(TRIPLET_DIR)/lib -L$(TRIPLET_DIR)/lib/manual-link
 override LDLIBS   += -lCLI11 -llzma -lz -lbz2 -lfmt
 
@@ -178,10 +178,9 @@ $(if $1,$(call $0,$(call tail,$1)))
 endef
 define include_sequence_lines
 $(info Building $@ with modules $^)
-echo "#ifndef $1" > $@
-echo "#define $1" >> $@
-$(call $0_impl,$^)
-echo "#endif" >> $@
+	printf '#ifndef %s\n#define %s\n' $1 $1 > $@
+	$(call $0_impl,$^)
+	printf '#endif\n' >> $@
 endef
 
 ### Object Files

@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURA-Cache | Phase-Aware & Hierarchical DQN Cache Simulator</title>
+    <!-- Google Fonts for typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Top Global App Bar -->
+    <header class="navbar-container">
+        <div class="navbar-brand">
+            <div class="brand-badge">RESEARCH SUITE</div>
+            <div class="brand-titles">
+                <h1>AURA-Cache <span class="brand-tag">RL LLC</span></h1>
+                <p>Phase-Aware & Hierarchical Deep Q-Network Cache Replacement · SEM 7 RL Project</p>
+            </div>
+        </div>
+
+        <!-- User Journey Navigation Steps -->
+        <nav class="journey-nav" aria-label="Project User Journey">
+            <button class="journey-tab active" data-target="sec-simulator">
+                <span class="tab-num">01</span>
+                <span class="tab-text">Simulator Lab</span>
+            </button>
+            <button class="journey-tab" data-target="sec-motivation">
+                <span class="tab-num">02</span>
+                <span class="tab-text">The Problem (LRU)</span>
+            </button>
+            <button class="journey-tab" data-target="sec-phases">
+                <span class="tab-num">03</span>
+                <span class="tab-text">Phase Discovery</span>
+            </button>
+            <button class="journey-tab" data-target="sec-brain">
+                <span class="tab-num">04</span>
+                <span class="tab-text">Neural Decision Engine</span>
+            </button>
+            <button class="journey-tab" data-target="sec-evaluation">
+                <span class="tab-num">05</span>
+                <span class="tab-text">Review Gallery</span>
+            </button>
+            <button class="journey-tab" data-target="sec-deployment">
+                <span class="tab-num">06</span>
+                <span class="tab-text">C++ & Hardware</span>
+            </button>
+        </nav>
+
+        <!-- Header Actions -->
+        <div class="navbar-actions">
+            <button class="btn btn-tour" id="btn-start-tour">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <span>Guided Tour</span>
+            </button>
+            <div class="telemetry-pill">
+                <span class="pill-label">PHASE</span>
+                <span class="pill-val phase-indicator" id="phase-display">P0</span>
+            </div>
+            <div class="telemetry-pill">
+                <span class="pill-label">PC</span>
+                <span class="pill-val" id="pc-display">0x00</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="app-main-layout">
+
+        <!-- ========================================================================= -->
+        <!-- SECTION 1: INTERACTIVE SIMULATOR LAB (PRIMARY WORKSPACE) -->
+        <!-- ========================================================================= -->
+        <section id="sec-simulator" class="journey-section active">
+            
+            <!-- Simulator Sub-Header Control Bar -->
+            <div class="sim-control-bar card-glass">
+                <div class="sim-brand-title">
+                    <h2>Interactive Hardware Simulation Lab</h2>
+                    <p>Real-time 16-way set-associative cache pipeline with live neural Q-inference</p>
+                </div>
+
+                <div class="playback-controls">
+                    <div class="stat-pill">
+                        <span class="pill-sub">STEP PROGRESS</span>
+                        <span class="pill-main" id="step-display">0 / 0</span>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-ctrl" id="btn-prev" disabled title="Step Backwards">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg>
+                            Prev
+                        </button>
+                        <button class="btn btn-ctrl btn-primary" id="btn-step" title="Step Forward 1 Instruction">
+                            Step
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+                        </button>
+                        <button class="btn btn-ctrl btn-accent" id="btn-play" title="Auto-advance cycle">
+                            <span id="play-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
+                            <span id="play-text">Auto Play</span>
+                        </button>
+                        <button class="btn btn-ctrl btn-danger" id="btn-reset" title="Reset Simulation">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                            <span>Reset</span>
+                        </button>
+                    </div>
+
+                    <div class="speed-slider-wrap">
+                        <span class="slider-label">Speed</span>
+                        <input type="range" id="speed-slider" min="100" max="2000" value="700" step="50" title="Execution Speed">
+                        <span class="slider-val" id="speed-val">700ms</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3-Column Simulator Grid -->
+            <div class="sim-grid">
+
+                <!-- Left Column: Inputs, Trace Presets, Policies & Stats -->
+                <aside class="sim-col sim-left">
+                    
+                    <!-- Trace Input Panel -->
+                    <div class="panel card-glass">
+                        <div class="panel-head">
+                            <span class="panel-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                            <span class="panel-title">INSTRUCTION TRACE INGESTION</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="preset-label">WORKLOAD PATTERN PRESETS</div>
+                            <div class="preset-grid">
+                                <button class="btn btn-preset" data-preset="sequential" title="Linear continuous scan">Sequential Scan</button>
+                                <button class="btn btn-preset" data-preset="stride" title="Array stride access">Stride-4 Pattern</button>
+                                <button class="btn btn-preset" data-preset="loop" title="18 blocks in 16-way set (Thrashing)">Thrash Loop</button>
+                                <button class="btn btn-preset active" data-preset="phase-change" title="Dynamic phase shifts">Phase-Shift Mix</button>
+                            </div>
+
+                            <div class="textarea-wrap">
+                                <label for="trace-input" class="sub-label">Hex Memory Addresses (One per cycle):</label>
+                                <textarea id="trace-input" spellcheck="false" placeholder="Enter hex addresses... e.g.&#10;0x1000&#10;0x1040&#10;0x2000"></textarea>
+                            </div>
+                            
+                            <button class="btn btn-run-primary" id="btn-load-run">
+                                <span>Ingest & Initialize Simulation</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Policy Selector -->
+                    <div class="panel card-glass">
+                        <div class="panel-head">
+                            <span class="panel-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M3 7h18"/><path d="M6 7l-3 7h6l-3-7"/><path d="M18 7l-3 7h6l-3-7"/><path d="M12 7v14"/><path d="M8 21h8"/></svg></span>
+                            <span class="panel-title">ACTIVE REPLACEMENT POLICY</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="policy-radio-group">
+                                <label class="policy-card selected">
+                                    <input type="radio" name="repl-policy" value="phase_aware" checked>
+                                    <div class="policy-info">
+                                        <div class="policy-name text-cyan">Phase-Aware DQN</div>
+                                        <div class="policy-desc">Our 28-dim ML agent with online K-Means phase context</div>
+                                    </div>
+                                    <span class="badge-ai">AI AGENT</span>
+                                </label>
+
+                                <label class="policy-card">
+                                    <input type="radio" name="repl-policy" value="lru">
+                                    <div class="policy-info">
+                                        <div class="policy-name">Baseline LRU</div>
+                                        <div class="policy-desc">Standard recency heuristic (vulnerable to scan thrashing)</div>
+                                    </div>
+                                    <span class="badge-std">HEURISTIC</span>
+                                </label>
+
+                                <label class="policy-card">
+                                    <input type="radio" name="repl-policy" value="random">
+                                    <div class="policy-info">
+                                        <div class="policy-name">Random Policy</div>
+                                        <div class="policy-desc">Stochastic eviction without locality consideration</div>
+                                    </div>
+                                    <span class="badge-std">RANDOM</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cumulative Statistics -->
+                    <div class="panel card-glass stats-card">
+                        <div class="panel-head">
+                            <span class="panel-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+                            <span class="panel-title">CACHE TELEMETRY METRICS</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="metrics-grid">
+                                <div class="metric-box">
+                                    <span class="m-label">TOTAL ACCESSES</span>
+                                    <span class="m-val" id="stat-accesses">0</span>
+                                </div>
+                                <div class="metric-box">
+                                    <span class="m-label text-green">CACHE HITS</span>
+                                    <span class="m-val text-green" id="stat-hits">0</span>
+                                </div>
+                                <div class="metric-box">
+                                    <span class="m-label text-red">CACHE MISSES</span>
+                                    <span class="m-val text-red" id="stat-misses">0</span>
+                                </div>
+                                <div class="metric-box highlight-box">
+                                    <span class="m-label text-cyan">HIT RATIO</span>
+                                    <span class="m-val text-cyan" id="stat-hitrate">0.0%</span>
+                                </div>
+                            </div>
+
+                            <div class="telemetry-subgrid">
+                                <div class="sub-metric">
+                                    <span>Rolling Miss Rate (50-win):</span>
+                                    <strong id="stat-rolling-miss">0.00</strong>
+                                </div>
+                                <div class="sub-metric">
+                                    <span>Write Ratio ($W_t$):</span>
+                                    <strong id="stat-write-frac">0.00</strong>
+                                </div>
+                                <div class="sub-metric">
+                                    <span>LLC Access Intensity:</span>
+                                    <strong id="stat-access-rate">0.0000</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Center Column: Registers & 16-Way Cache Architecture -->
+                <section class="sim-col sim-center">
+                    
+                    <!-- CPU Register Bank -->
+                    <div class="panel card-glass registers-deck">
+                        <div class="panel-head flex-between">
+                            <div class="head-left">
+                                <span class="panel-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></span>
+                                <span class="panel-title">CPU GENERAL PURPOSE REGISTERS</span>
+                            </div>
+                            <span class="head-tag">16-Register Bank ($g_0-g_{15}$)</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="registers-grid" id="registers-bank">
+                                <!-- Dynamically generated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 16-Way Cache Sets Array Visualizer -->
+                    <div class="panel card-glass cache-array-deck">
+                        <div class="panel-head flex-between">
+                            <div class="head-left">
+                                <span class="panel-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></span>
+                                <span class="panel-title">LAST-LEVEL CACHE MEMORY STRUCTURE</span>
+                            </div>
+                            <div class="cache-legend">
+                                <span class="legend-item"><span class="dot dot-hit"></span> Hit</span>
+                                <span class="legend-item"><span class="dot dot-miss"></span> Miss</span>
+                                <span class="legend-item"><span class="dot dot-victim"></span> Evicted Target</span>
+                                <span class="legend-item"><span class="dot dot-mru"></span> MRU (Rank 0)</span>
+                            </div>
+                        </div>
+                        <div class="panel-body cache-scroll-container" id="cache-visualization">
+                            <!-- Dynamically generated cache sets and ways -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Right Column: Live Neural Network Engine & Performance Charts -->
+                <aside class="sim-col sim-right">
+                    
+                    <!-- Neural Network Decision Engine -->
+                    <div class="panel card-glass neural-engine-card">
+                        <div class="panel-head flex-between">
+                            <div class="head-left">
+                                <span class="panel-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></span>
+                                <span class="panel-title">DEEP Q-NETWORK INFERENCE</span>
+                            </div>
+                            <span class="badge-ai">LIVE INFERENCE</span>
+                        </div>
+                        <div class="panel-body">
+                            
+                            <!-- 28-dim Input Feature Preview -->
+                            <div class="nn-feature-deck">
+                                <div class="feat-header">
+                                    <span>INPUT VECTOR (28-DIMENSIONAL)</span>
+                                    <span class="feat-badge" id="nn-cluster-tag">Phase P0 Active</span>
+                                </div>
+                                
+                                <div class="feat-group">
+                                    <div class="feat-title">16 Normalized Recency Ranks (Way 0..15)</div>
+                                    <div class="recency-bars-grid" id="nn-recency-bars">
+                                        <!-- Dynamically generated recency ranks -->
+                                    </div>
+                                </div>
+
+                                <div class="feat-split">
+                                    <div class="feat-half">
+                                        <div class="feat-title">Access Type One-Hot</div>
+                                        <div class="pill-type" id="nn-type-pill">LOAD (0x0)</div>
+                                    </div>
+                                    <div class="feat-half">
+                                        <div class="feat-title">KMeans Cluster One-Hot</div>
+                                        <div class="pill-phase" id="nn-phase-pill">[1, 0, 0, 0]</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Neural Hidden Layers Graph -->
+                            <div class="nn-network-visual">
+                                <div class="layer-col">
+                                    <span class="layer-name">IN (28)</span>
+                                    <div class="nodes-container" id="nodes-input">
+                                        <div class="node active"></div>
+                                        <div class="node active"></div>
+                                        <div class="node"></div>
+                                        <div class="node active"></div>
+                                        <div class="node"></div>
+                                    </div>
+                                </div>
+                                <div class="layer-connector"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                                <div class="layer-col">
+                                    <span class="layer-name">FC1 (64)</span>
+                                    <div class="nodes-container" id="nn-nodes-h1"></div>
+                                </div>
+                                <div class="layer-connector"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                                <div class="layer-col">
+                                    <span class="layer-name">FC2 (32)</span>
+                                    <div class="nodes-container" id="nn-nodes-h2"></div>
+                                </div>
+                                <div class="layer-connector"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                                <div class="layer-col">
+                                    <span class="layer-name">OUT (16)</span>
+                                    <div class="nodes-container" id="nodes-out">
+                                        <div class="node active target-node"></div>
+                                        <div class="node"></div>
+                                        <div class="node"></div>
+                                        <div class="node"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Top Output Target Eviction Way -->
+                            <div class="q-decision-box" id="q-decision-box">
+                                <div class="q-target-meta">
+                                    <span class="q-label">RECOMMENDED EVICTION TARGET:</span>
+                                    <span class="q-way" id="target-way-display">Way 15 (Max Q)</span>
+                                </div>
+                                <div class="q-meter">
+                                    <div class="q-fill" id="q-confidence-bar" style="width: 85%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Comparison Charts -->
+                    <div class="panel card-glass charts-card">
+                        <div class="panel-head">
+                            <span class="panel-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+                            <span class="panel-title">REAL-TIME COMPARISON PERFORMANCE</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="chart-box">
+                                <div class="chart-caption">Cumulative Cache Misses (Lower is Better)</div>
+                                <canvas id="comparison-chart" width="280" height="130"></canvas>
+                            </div>
+                            <div class="chart-box">
+                                <div class="chart-caption">Rolling Miss Rate & Phase Cluster Trajectory</div>
+                                <canvas id="phase-timeline-chart" width="280" height="130"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+
+            <!-- Execution Trace Log at Bottom -->
+            <div class="panel card-glass log-panel">
+                <div class="panel-head flex-between">
+                    <div class="head-left">
+                        <span class="panel-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+                        <span class="panel-title">HARDWARE MEMORY BUS & DECISION AUDIT STREAM</span>
+                    </div>
+                    <button class="btn btn-mini" id="btn-clear-log">Clear Audit Log</button>
+                </div>
+                <div class="panel-body log-body" id="execution-log">
+                    <div class="log-row info-row">[Init] AURA-Cache simulator ready. Select preset or step forward.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- SECTION 2: THE PROBLEM (WHY LRU FAILS) -->
+        <!-- ========================================================================= -->
+        <section id="sec-motivation" class="journey-section">
+            <div class="section-container">
+                <div class="sec-header">
+                    <span class="sec-badge">JOURNEY STEP 02</span>
+                    <h2>The Memory Wall & The Breakdown of Traditional LRU</h2>
+                    <p>Why conventional cache replacement policies suffer massive performance penalties during modern workload phase transitions.</p>
+                </div>
+
+                <!-- Latency Gap Cards -->
+                <div class="latency-flow-grid">
+                    <div class="latency-card">
+                        <div class="l-level">L1 CACHE</div>
+                        <div class="l-lat">~1.5 ns</div>
+                        <div class="l-cap">32-64 KB</div>
+                        <div class="l-note">Core-private, ultra-fast</div>
+                    </div>
+                    <div class="latency-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                    <div class="latency-card">
+                        <div class="l-level">L2 CACHE</div>
+                        <div class="l-lat">~4.5 ns</div>
+                        <div class="l-cap">512 KB - 1 MB</div>
+                        <div class="l-note">Private mid-tier buffer</div>
+                    </div>
+                    <div class="latency-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                    <div class="latency-card l-highlight">
+                        <div class="l-level">LLC (OUR TARGET)</div>
+                        <div class="l-lat">~12 - 18 ns</div>
+                        <div class="l-cap">2 MB - 32 MB</div>
+                        <div class="l-note">Shared Last-Level Cache</div>
+                    </div>
+                    <div class="latency-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                    <div class="latency-card l-dram">
+                        <div class="l-level">MAIN MEMORY (DRAM)</div>
+                        <div class="l-lat text-red">~60 - 90 ns</div>
+                        <div class="l-cap">16 - 64 GB</div>
+                        <div class="l-note">200× Stall Penalty!</div>
+                    </div>
+                </div>
+
+                <!-- Contrast Grid: LRU vs Belady vs Phase-Aware -->
+                <div class="trio-cards-grid">
+                    <div class="theory-card">
+                        <div class="theory-header">
+                            <span class="th-badge bg-red">HEURISTIC FAILURE</span>
+                            <h3>Least Recently Used (LRU)</h3>
+                        </div>
+                        <p><strong>The Principle:</strong> Assumes temporal locality—blocks accessed recently will be accessed again soon.</p>
+                        <p class="th-flaw"><strong>Fatal Flaw (Scan Thrashing):</strong> During streaming scans or loops that exceed cache set size (e.g. 18 lines into a 16-way set), LRU constantly evicts blocks right before they are needed, collapsing hit rates to 0%.</p>
+                        <div class="th-stat">
+                            <span>Belady Match Accuracy:</span>
+                            <strong class="text-red">49.3%</strong>
+                        </div>
+                    </div>
+
+                    <div class="theory-card highlight-card">
+                        <div class="theory-header">
+                            <span class="th-badge bg-cyan">OUR SOLUTION</span>
+                            <h3>Phase-Aware DQN (AURA-Cache)</h3>
+                        </div>
+                        <p><strong>The Principle:</strong> Offline Q-learning supervised by Belady's optimal oracle, dynamically augmented with online $K=4$ KMeans phase clustering.</p>
+                        <p class="th-flaw text-cyan"><strong>The Advantage:</strong> Detects scan phases to aggressively bypass or discard non-reusable lines, while preserving high-temporal lines during loop phases.</p>
+                        <div class="th-stat">
+                            <span>Belady Match Accuracy:</span>
+                            <strong class="text-cyan">63.5% (+14.2% over LRU)</strong>
+                        </div>
+                    </div>
+
+                    <div class="theory-card">
+                        <div class="theory-header">
+                            <span class="th-badge bg-gold">THEORETICAL LIMIT</span>
+                            <h3>Belady's MIN Algorithm (Oracle)</h3>
+                        </div>
+                        <p><strong>The Principle:</strong> Perfect clairvoyance. Evicts the block whose next access lies furthest into the future.</p>
+                        <p class="th-flaw"><strong>Hardware Realization:</strong> Physically impossible in online hardware because it requires future knowledge. Serves as the golden upper-bound reward target for our reinforcement learning agent.</p>
+                        <div class="th-stat">
+                            <span>Theoretical Ceiling:</span>
+                            <strong class="text-gold">100.0% Optimal</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Demo Launcher -->
+                <div class="action-banner card-glass">
+                    <div class="banner-text">
+                        <h3>Witness the Scan Thrashing Vulnerability in the Simulator</h3>
+                        <p>Load the 18-block loop preset to see LRU thrash with continuous evictions while Phase-Aware DQN protects hot cache lines.</p>
+                    </div>
+                    <button class="btn btn-action-primary" id="btn-demo-thrash">
+                        <span>Load Thrash Scenario into Lab</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- SECTION 3: PHASE DISCOVERY & WORKLOAD CLUSTERING -->
+        <!-- ========================================================================= -->
+        <section id="sec-phases" class="journey-section">
+            <div class="section-container">
+                <div class="sec-header">
+                    <span class="sec-badge">JOURNEY STEP 03</span>
+                    <h2>Workload Phase Discovery & KMeans Clustering ($K=4$)</h2>
+                    <p>Applications are not static. Memory access patterns exhibit distinct macroscopic operational phases requiring different replacement policies.</p>
+                </div>
+
+                <!-- 4 Phase Archetype Cards -->
+                <div class="phase-archetypes-grid">
+                    <div class="phase-card p0-card">
+                        <div class="p-header">
+                            <span class="p-badge" style="background:#FF6B6B;">PHASE 0</span>
+                            <h3>Burst / Scan Phase</h3>
+                        </div>
+                        <div class="p-metrics">
+                            <div class="pm-row"><span>Rolling Miss Rate:</span> <strong>High (> 0.70)</strong></div>
+                            <div class="pm-row"><span>Read Ratio:</span> <strong>Dominant (Reads)</strong></div>
+                            <div class="pm-row"><span>Working Set:</span> <strong>Transient</strong></div>
+                        </div>
+                        <p class="p-behavior">Occurs during large array scans, hashing collisions, or cold compulsory start. Standard LRU thrashes violently here.</p>
+                        <div class="p-action"><strong>DQN Strategy:</strong> Aggressive discard / early eviction of incoming lines to protect resident cache lines.</div>
+                    </div>
+
+                    <div class="phase-card p1-card">
+                        <div class="p-header">
+                            <span class="p-badge" style="background:#4ECDC4;">PHASE 1</span>
+                            <h3>Steady Execution</h3>
+                        </div>
+                        <div class="p-metrics">
+                            <div class="pm-row"><span>Rolling Miss Rate:</span> <strong>Moderate (~0.35)</strong></div>
+                            <div class="pm-row"><span>Read Ratio:</span> <strong>Balanced</strong></div>
+                            <div class="pm-row"><span>Working Set:</span> <strong>Predictable</strong></div>
+                        </div>
+                        <p class="p-behavior">Balanced compute intervals where conventional recency and frequency both provide reasonable locality signals.</p>
+                        <div class="p-action"><strong>DQN Strategy:</strong> Standard recency weighting with subtle Belady victim adjustments.</div>
+                    </div>
+
+                    <div class="phase-card p2-card">
+                        <div class="p-header">
+                            <span class="p-badge" style="background:#45B7D1;">PHASE 2</span>
+                            <h3>High Temporal Reuse</h3>
+                        </div>
+                        <div class="p-metrics">
+                            <div class="pm-row"><span>Rolling Miss Rate:</span> <strong>Low (< 0.15)</strong></div>
+                            <div class="pm-row"><span>Read Ratio:</span> <strong>Variable</strong></div>
+                            <div class="pm-row"><span>Working Set:</span> <strong>Tight Kernels</strong></div>
+                        </div>
+                        <p class="p-behavior">Tight computational loops or matrix multiplication tiles where lines are accessed repeatedly within short horizons.</p>
+                        <div class="p-action"><strong>DQN Strategy:</strong> Lock resident lines in cache; reject premature evictions until loop termination.</div>
+                    </div>
+
+                    <div class="phase-card p3-card">
+                        <div class="p-header">
+                            <span class="p-badge" style="background:#96CEB4;">PHASE 3</span>
+                            <h3>Mixed Irregular Workload</h3>
+                        </div>
+                        <div class="p-metrics">
+                            <div class="pm-row"><span>Rolling Miss Rate:</span> <strong>Volatile (~0.50)</strong></div>
+                            <div class="pm-row"><span>Read Ratio:</span> <strong>High Writes</strong></div>
+                            <div class="pm-row"><span>Working Set:</span> <strong>Pointer-Chasing</strong></div>
+                        </div>
+                        <p class="p-behavior">Graph traversal, tree lookups, or indirect memory references ($A[B[i]]$) with weak spatial correlation.</p>
+                        <div class="p-action"><strong>DQN Strategy:</strong> Adaptive hybrid ranking favoring age and insertion time over pure recency.</div>
+                    </div>
+                </div>
+
+                <!-- Phase Telemetry Features Diagram -->
+                <div class="feature-engineering-card card-glass">
+                    <h3>Online Telemetry Vector Extraction ($4 \text{ Features}$)</h3>
+                    <p>ChampSim hardware instrumentation monitors a sliding rolling window of $50$ memory references without profiling overhead:</p>
+                    <div class="features-equation-grid">
+                        <div class="eq-box">
+                            <div class="eq-title">1. Rolling Miss Rate ($M_t$)</div>
+                            <code>M_t = \frac{\text{Misses within last 50 accesses}}{50}</code>
+                        </div>
+                        <div class="eq-box">
+                            <div class="eq-title">2. Rolling Read Ratio ($R_t$)</div>
+                            <code>R_t = \frac{\text{LOAD references within last 50}}{50}</code>
+                        </div>
+                        <div class="eq-box">
+                            <div class="eq-title">3. Reuse Fraction ($U_t$)</div>
+                            <code>U_t = \frac{\text{Re-referenced cache blocks}}{50}</code>
+                        </div>
+                        <div class="eq-box">
+                            <div class="eq-title">4. Access Intensity ($I_t$)</div>
+                            <code>I_t = \frac{\text{Access Count}}{\text{Elapsed Cycles}}</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- SECTION 4: DEEP Q-NETWORK DECISION ENGINE ARCHITECTURE -->
+        <!-- ========================================================================= -->
+        <section id="sec-brain" class="journey-section">
+            <div class="section-container">
+                <div class="sec-header">
+                    <span class="sec-badge">JOURNEY STEP 04</span>
+                    <h2>Deep Q-Network Decision Engine Architecture</h2>
+                    <p>How AURA-Cache transforms 28 cache-line and workload telemetry dimensions into an optimal eviction decision.</p>
+                </div>
+
+                <!-- 28-dim State Space Anatomy -->
+                <div class="tensor-anatomy-card card-glass">
+                    <h3>State Vector Formulation: $S_t \in \mathbb{R}^{28}$</h3>
+                    <div class="tensor-blocks-grid">
+                        <div class="t-block tb-recency">
+                            <div class="tb-head">Dimensions 0..15 (16 Values)</div>
+                            <div class="tb-title">Normalized Way Recency Ranks</div>
+                            <p>For each way $w \in [0, 15]$ in the cache set: $r_w / 15.0$, where $0.0 = \text{MRU}$ (most recent) and $1.0 = \text{LRU}$ (least recent).</p>
+                        </div>
+                        <div class="t-block tb-type">
+                            <div class="tb-head">Dimensions 16..23 (8 Values)</div>
+                            <div class="tb-title">Access Type One-Hot Encoding</div>
+                            <p>Categorizes the memory operation causing the miss: <code>LOAD</code>, <code>RFO</code>, <code>PREFETCH</code>, <code>WRITEBACK</code>, etc.</p>
+                        </div>
+                        <div class="t-block tb-phase">
+                            <div class="tb-head">Dimensions 24..27 (4 Values)</div>
+                            <div class="tb-title">KMeans Cluster One-Hot Vector</div>
+                            <p>The online predicted workload phase cluster from Section 3: $[1,0,0,0]$ through $[0,0,0,1]$. Provides macroscopic context.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deep Q-Network Topology -->
+                <div class="neural-net-topology-card card-glass">
+                    <h3>Deep Neural Network Topology & Parameters</h3>
+                    <div class="topology-grid">
+                        <div class="topo-layer">
+                            <span class="layer-pill">INPUT LAYER</span>
+                            <div class="topo-name">28 Neurons</div>
+                            <div class="topo-sub">State vector $S_t$</div>
+                        </div>
+                        <div class="topo-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                        <div class="topo-layer">
+                            <span class="layer-pill">DENSE 1</span>
+                            <div class="topo-name">64 Neurons + ReLU</div>
+                            <div class="topo-sub">$28 \times 64 = 1,792$ weights</div>
+                        </div>
+                        <div class="topo-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                        <div class="topo-layer">
+                            <span class="layer-pill">DENSE 2</span>
+                            <div class="topo-name">32 Neurons + ReLU</div>
+                            <div class="topo-sub">$64 \times 32 = 2,048$ weights</div>
+                        </div>
+                        <div class="topo-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                        <div class="topo-layer topo-out">
+                            <span class="layer-pill bg-cyan">OUTPUT LAYER</span>
+                            <div class="topo-name">16 Q-Values</div>
+                            <div class="topo-sub">$32 \times 16 = 512$ weights</div>
+                        </div>
+                    </div>
+
+                    <div class="decision-math-box">
+                        <div class="math-left">
+                            <strong>Policy Eviction Rule:</strong>
+                            <code>\text{Victim Way} = \arg\max_{w \in [0, 15]} Q(S_t, w; \theta)</code>
+                        </div>
+                        <div class="math-right">
+                            <span>Total Storage:</span>
+                            <strong class="text-cyan">4,352 Parameters (~4.35 KB in INT8)</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- SECTION 5: EMPIRICAL EVALUATION & REVIEW GALLERY -->
+        <!-- ========================================================================= -->
+        <section id="sec-evaluation" class="journey-section">
+            <div class="section-container">
+                <div class="sec-header">
+                    <span class="sec-badge">JOURNEY STEP 05</span>
+                    <h2>Empirical Evaluation & 50% Review Visual Gallery</h2>
+                    <p>Publication-quality figures generated directly from offline datasets and simulation logs.</p>
+                </div>
+
+                <!-- High-Resolution Figures Gallery Grid -->
+                <div class="figures-gallery-grid">
+                    
+                    <!-- Fig 0 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/00_summary_dashboard.png" data-title="Executive Summary Dashboard" data-desc="Complete overview of system components, benchmark trace metrics, training accuracy progression, and policy performance gains.">
+                        <div class="img-wrap">
+                            <img src="../review_figures/00_summary_dashboard.png" alt="Summary Dashboard" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>00. Summary Dashboard</h4>
+                            <p>Executive synthesis of model architecture, accuracy gains, and benchmark traces.</p>
+                        </div>
+                    </div>
+
+                    <!-- Fig 1 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/01_system_architecture.png" data-title="End-to-End System Architecture" data-desc="Block diagram showing trace execution in ChampSim, feature telemetry logging, KMeans clustering, offline training, and C++ inference loop.">
+                        <div class="img-wrap">
+                            <img src="../review_figures/01_system_architecture.png" alt="System Architecture" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>01. System Architecture</h4>
+                            <p>Complete data pipeline from ChampSim instrumentation to C++ neural inference.</p>
+                        </div>
+                    </div>
+
+                    <!-- Fig 2 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/02_training_curves.png" data-title="Training Loss & Accuracy Progression" data-desc="Loss convergence and Belady match accuracy curves over 20 epochs across Basic DQN, Hierarchical DQN, and Phase-Aware DQN.">
+                        <div class="img-wrap">
+                            <img src="../review_figures/02_training_curves.png" alt="Training Curves" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>02. Training Convergence</h4>
+                            <p>Epoch-by-epoch loss reduction and Belady match accuracy improvement.</p>
+                        </div>
+                    </div>
+
+                    <!-- Fig 3 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/03_phase_clustering.png" data-title="KMeans 2D PCA Cluster Distribution" data-desc="2D Principal Component Analysis (PCA) projection of multi-dimensional phase feature space, highlighting separation between 4 clusters.">
+                        <div class="img-wrap">
+                            <img src="../review_figures/03_phase_clustering.png" alt="Phase Clustering" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>03. Phase Clustering (PCA)</h4>
+                            <p>Unsupervised 2D projection proving distinct macroscopic workload phase separation.</p>
+                        </div>
+                    </div>
+
+                    <!-- Fig 4 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/04_phase_ablation.png" data-title="Phase Ablation (Real vs Scrambled Labels)" data-desc="Control experiment comparing real phase-aware model against randomly permuted cluster labels, proving that phase context provides true predictive signal.">
+                        <div class="img-wrap">
+                            <img src="../review_figures/04_phase_ablation.png" alt="Phase Ablation" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>04. Phase Ablation Proof</h4>
+                            <p>Randomly scrambled phase control experiment proving causal predictive utility.</p>
+                        </div>
+                    </div>
+
+                    <!-- Fig 5 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/05_accuracy_comparison.png" data-title="Policy Accuracy Comparison Bar Chart" data-desc="Direct comparison of Belady match rate across LRU (49.3%), Basic DQN (58.7%), Hierarchical DQN (61.2%), and Phase-Aware DQN (63.5%).">
+                        <div class="img-wrap">
+                            <img src="../review_figures/05_accuracy_comparison.png" alt="Accuracy Comparison" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>05. Accuracy Comparison</h4>
+                            <p>Head-to-head Belady MIN match accuracy showing +14.2% advantage over LRU.</p>
+                        </div>
+                    </div>
+
+                    <!-- Fig 6 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/06_eviction_heatmap.png" data-title="Eviction Way Confusion Heatmap" data-desc="Matrix comparing predicted victim way against True Belady optimal victim way across 16 cache ways, showing strong diagonal concentration.">
+                        <div class="img-wrap">
+                            <img src="../review_figures/06_eviction_heatmap.png" alt="Eviction Heatmap" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>06. Eviction Heatmap</h4>
+                            <p>Per-way correlation heatmap between predicted victims and Belady oracle.</p>
+                        </div>
+                    </div>
+
+                    <!-- Fig 7 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/07_miss_rate_timeline.png" data-title="Rolling Miss Rate Timeline with Phase Overlay" data-desc="Time-series evolution of cache miss rate across cycles with colored background bands denoting dynamically active KMeans phase clusters.">
+                        <div class="img-wrap">
+                            <img src="../review_figures/07_miss_rate_timeline.png" alt="Timeline" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>07. Miss Rate Timeline</h4>
+                            <p>Dynamic timeline tracking rolling miss rate variations across workload phases.</p>
+                        </div>
+                    </div>
+
+                    <!-- Fig 8 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/08_nn_architecture.png" data-title="Neural Network Connection Diagram" data-desc="Layer-by-layer architectural blueprint showing dense connections, tensor dimensions, activation functions, and memory requirements.">
+                        <div class="img-wrap">
+                            <img src="../review_figures/08_nn_architecture.png" alt="NN Architecture" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>08. Neural Architecture</h4>
+                            <p>Detailed structural schematic of the multi-layer perceptron decision network.</p>
+                        </div>
+                    </div>
+
+                    <!-- Fig 9 -->
+                    <div class="figure-card card-glass" data-img="../review_figures/09_simulator_ui.png" data-title="Interactive Hardware Simulation Lab" data-desc="Real-time web simulation interface displaying CPU registers, 16-way set-associative cache array, live neural Q-inference vector, and dynamic performance telemetry.">
+                        <div class="img-wrap">
+                            <img src="../review_figures/09_simulator_ui.png" alt="Interactive Simulator UI" loading="lazy">
+                            <div class="img-overlay"><span>Click to Enlarge</span></div>
+                        </div>
+                        <div class="fig-meta">
+                            <h4>09. Interactive Simulator UI</h4>
+                            <p>Professional research testbed featuring cycle-by-cycle cache pipeline inspection.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- SECTION 6: CHAMPSIM C++ DEPLOYMENT & HARDWARE OVERHEAD -->
+        <!-- ========================================================================= -->
+        <section id="sec-deployment" class="journey-section">
+            <div class="section-container">
+                <div class="sec-header">
+                    <span class="sec-badge">JOURNEY STEP 06</span>
+                    <h2>Hardware Feasibility & ChampSim C++ Integration</h2>
+                    <p>Demonstrating how the trained ML weights translate into nanosecond-level C++ simulation and realistic hardware budget limits.</p>
+                </div>
+
+                <!-- Hardware Budget Metrics -->
+                <div class="hw-budget-grid">
+                    <div class="hw-card card-glass">
+                        <div class="hw-num text-cyan">4,352</div>
+                        <div class="hw-title">Total Model Parameters</div>
+                        <div class="hw-desc">Weights and biases across 3 fully-connected layers (28-64-32-16).</div>
+                    </div>
+                    <div class="hw-card card-glass">
+                        <div class="hw-num text-green">4.35 KB</div>
+                        <div class="hw-title">INT8 Quantized Footprint</div>
+                        <div class="hw-desc">8-bit weight quantization allows entire model to reside in miniature on-chip SRAM.</div>
+                    </div>
+                    <div class="hw-card card-glass">
+                        <div class="hw-num text-gold">&lt; 3.4%</div>
+                        <div class="hw-title">LLC Tag Array Overhead</div>
+                        <div class="hw-desc">In a 2 MB LLC (tag store ~128 KB), the 4.35 KB model adds negligible silicon area.</div>
+                    </div>
+                    <div class="hw-card card-glass">
+                        <div class="hw-num text-cyan">~8 Cycles</div>
+                        <div class="hw-title">Inference Latency</div>
+                        <div class="hw-desc">Parallel MAC array completes evaluation well within LLC access latency (30-40 cycles).</div>
+                    </div>
+                </div>
+
+                <!-- Code Viewer Card -->
+                <div class="code-deck card-glass">
+                    <div class="code-header flex-between">
+                        <div class="code-tabs">
+                            <button class="c-tab active" data-file="cpp">replacement/phase_aware_rl/phase_aware_rl.cc</button>
+                            <button class="c-tab" data-file="json">champsim_config.json</button>
+                            <button class="c-tab" data-file="bash">Build & Run Commands</button>
+                        </div>
+                        <span class="code-tag">C++17 / Native Simulation</span>
+                    </div>
+                    <div class="code-body">
+                        <pre class="code-block" id="code-display"><code>// Phase-Aware RL C++ Cache Replacement Inference
+long phase_aware_rl::find_victim(uint32_t cpu, uint64_t instr_id, long set, 
+                                 const BLOCK* current_set, uint64_t ip, 
+                                 uint64_t full_addr, uint32_t type)
+{
+    // 1. Extract online phase features and predict cluster
+    auto [miss_rate, write_ratio, access_rate] = get_phase_features();
+    int cluster_id = predict_cluster(miss_rate, write_ratio, access_rate);
+
+    // 2. Formulate 28-dimensional state vector
+    std::vector<float> state = build_state_vector(set, type, cluster_id);
+
+    // 3. Fast feedforward neural pass (weights loaded from JSON)
+    std::vector<float> q_values = evaluate_dqn(state);
+
+    // 4. Return cache way with highest Q-value
+    return std::distance(q_values.begin(), std::max_element(q_values.begin(), q_values.end()));
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Floating Guided Tour Assistant Bar -->
+    <div class="guided-tour-dock" id="tour-dock" style="display: none;">
+        <div class="tour-card card-glass">
+            <div class="tour-left">
+                <div class="tour-step-badge">
+                    <span id="tour-step-label">Step 1 of 6</span>
+                </div>
+                <div class="tour-content">
+                    <h4 id="tour-title">Interactive Simulator Lab</h4>
+                    <p id="tour-desc">Step forward through cycle memory operations, inspect 16-way cache sets, and observe real-time neural Q-inferences.</p>
+                </div>
+            </div>
+            <div class="tour-controls">
+                <button class="btn btn-tour-ctrl" id="btn-tour-prev">Previous</button>
+                <button class="btn btn-tour-ctrl btn-tour-primary" id="btn-tour-next">Next Step</button>
+                <button class="btn btn-tour-close" id="btn-tour-close" title="Exit Tour">&times;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Lightbox Modal -->
+    <div class="lightbox-modal" id="lightbox-modal">
+        <div class="lightbox-backdrop" id="lightbox-backdrop"></div>
+        <div class="lightbox-content card-glass">
+            <button class="btn-lightbox-close" id="btn-lightbox-close">&times;</button>
+            <div class="lightbox-header">
+                <h3 id="lightbox-title">Figure Preview</h3>
+                <p id="lightbox-desc">Detailed publication figure description.</p>
+            </div>
+            <div class="lightbox-img-wrap">
+                <img id="lightbox-img" src="" alt="Enlarged Figure">
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="weights.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

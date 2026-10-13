@@ -30,3 +30,9 @@ compile_commands.json
 
 .vscode/
 **/.DS_Store
+
+# Temporary archives and LaTeX build artifacts
+*.zip
+*.aux
+*.log
+*.out
