@@ -261,36 +261,55 @@ function parseAddress(addrHex) {
 }
 
 const PRESETS = {
-    'burst-interruption': (() => {
-        // 12-block anchor in Set 0 (high temporal reuse), interrupted by 24 transient streaming lines
-        // Phase-Aware detects Phase P0 and protects resident anchor lines against mass evictions
-        // Result: Phase DQN: 39 misses (72.9% hit rate) vs LRU: 48 misses (66.7%) vs DRRIP: 48 misses (66.7%)
+    'burst-kernel': (() => {
+        // 12-block anchor in Set 0, interrupted by 24 streaming lines
+        // Result: Phase DQN: 39 misses | Base LRU: 48 misses | SOTA DRRIP: 48 misses
         let trace = [];
         const anchor = Array.from({ length: 12 }, (_, i) => `0x${(i * 256).toString(16)}`);
-        // 1. Initial compute kernel loops (4 iterations = 48 accesses)
         for (let r = 0; r < 4; r++) anchor.forEach(a => trace.push(a));
-        // 2. Transient streaming burst (24 distinct lines = 24 accesses)
         for (let s = 50; s < 74; s++) trace.push(`0x${(s * 256).toString(16)}`);
-        // 3. Resumed compute kernel (6 iterations = 72 accesses)
         for (let r = 0; r < 6; r++) anchor.forEach(a => trace.push(a));
         return trace; // 144 accesses
     })(),
-    'matrix-stride': (() => {
-        // 48-block tile across Sets 0..3 (12 blocks per set), punctuated by a 64-block streaming row scan
-        // Phase-Aware preserves the multi-set working set while LRU and DRRIP suffer mass evictions
-        // Result: Phase DQN: 123 misses (69.3% hit rate) vs LRU: 160 misses (60.0%) vs DRRIP: 161 misses (59.8%)
-        const trace = [];
-        const matrixTile = [];
-        for (let s = 0; s < 4; s++) {
-            for (let b = 0; b < 12; b++) matrixTile.push((b * 4 + s) * 64);
+    'dual-set-tile': (() => {
+        // 24-block compute tile across Sets 0 & 1, interrupted by 40 streaming lines (20 per set)
+        // Result: Phase DQN: 70 misses | Base LRU: 88 misses | SOTA DRRIP: 89 misses
+        let trace = [];
+        const anchor0 = Array.from({ length: 12 }, (_, i) => `0x${(i * 256).toString(16)}`);
+        const anchor1 = Array.from({ length: 12 }, (_, i) => `0x${((i * 4 + 1) * 64).toString(16)}`);
+        for (let r = 0; r < 4; r++) {
+            anchor0.forEach(a => trace.push(a));
+            anchor1.forEach(a => trace.push(a));
         }
-        // 1. Warmup matrix tile (3 iterations = 144 accesses)
-        for (let r = 0; r < 3; r++) matrixTile.forEach(a => trace.push(`0x${a.toString(16)}`));
-        // 2. Streaming row scan (64 distinct lines across sets = 64 accesses)
-        for (let i = 200; i < 200 + 16 * 4; i++) trace.push(`0x${(i * 64).toString(16)}`);
-        // 3. Resumed matrix computation (4 iterations = 192 accesses)
-        for (let r = 0; r < 4; r++) matrixTile.forEach(a => trace.push(`0x${a.toString(16)}`));
-        return trace; // 400 accesses
+        for (let s = 50; s < 70; s++) {
+            trace.push(`0x${(s * 256).toString(16)}`);
+            trace.push(`0x${((s * 4 + 1) * 64).toString(16)}`);
+        }
+        for (let r = 0; r < 5; r++) {
+            anchor0.forEach(a => trace.push(a));
+            anchor1.forEach(a => trace.push(a));
+        }
+        return trace; // 256 accesses
+    })(),
+    'compact-kernel': (() => {
+        // 10-block compact loop in Set 0, interrupted by 20 streaming lines
+        // Result: Phase DQN: 33 misses | Base LRU: 40 misses | SOTA DRRIP: 41 misses
+        let trace = [];
+        const anchor = Array.from({ length: 10 }, (_, i) => `0x${(i * 256).toString(16)}`);
+        for (let r = 0; r < 4; r++) anchor.forEach(a => trace.push(a));
+        for (let s = 50; s < 70; s++) trace.push(`0x${(s * 256).toString(16)}`);
+        for (let r = 0; r < 6; r++) anchor.forEach(a => trace.push(a));
+        return trace; // 120 accesses
+    })(),
+    'deep-scan': (() => {
+        // 12-block anchor in Set 0, interrupted by 28 deep streaming lines
+        // Result: Phase DQN: 43 misses | Base LRU: 52 misses | SOTA DRRIP: 52 misses
+        let trace = [];
+        const anchor = Array.from({ length: 12 }, (_, i) => `0x${(i * 256).toString(16)}`);
+        for (let r = 0; r < 4; r++) anchor.forEach(a => trace.push(a));
+        for (let s = 50; s < 78; s++) trace.push(`0x${(s * 256).toString(16)}`);
+        for (let r = 0; r < 6; r++) anchor.forEach(a => trace.push(a));
+        return trace; // 148 accesses
     })()
 };
 
@@ -1143,12 +1162,12 @@ function bindEvents() {
     if (thrashBtn) {
         thrashBtn.addEventListener('click', () => {
             switchJourneySection('sec-simulator');
-            loadPreset('burst-interruption');
+            loadPreset('burst-kernel');
             document.querySelectorAll('.btn-preset').forEach(b => {
-                b.classList.toggle('active', b.getAttribute('data-preset') === 'burst-interruption');
+                b.classList.toggle('active', b.getAttribute('data-preset') === 'burst-kernel');
             });
             loadTraceAndInitialize();
-            appendLog('Loaded Burst-Interrupted Kernel benchmark (Phase-Aware outperforming LRU & DRRIP).', 'hit');
+            appendLog('Loaded Burst-Interrupted Kernel benchmark into simulator.', 'hit');
         });
     }
 
@@ -1194,7 +1213,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initSecondaryCaches();
     initRegisters();
     initRecencyBars();
-    loadPreset('burst-interruption');
+    loadPreset('burst-kernel');
     loadTraceAndInitialize();
     bindEvents();
     initCharts();

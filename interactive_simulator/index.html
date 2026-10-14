@@ -127,10 +127,12 @@
                             <span class="panel-title">INSTRUCTION TRACE INGESTION</span>
                         </div>
                         <div class="panel-body">
-                            <div class="preset-label">WORKLOAD PATTERN PRESETS (PHASE-AWARE SUPERIORITY)</div>
+                            <div class="preset-label">WORKLOAD PATTERN PRESETS</div>
                             <div class="preset-grid">
-                                <button class="btn btn-preset active" data-preset="burst-interruption" title="12-block anchor kernel interrupted by 24 streaming lines (Phase DQN: 39 misses vs LRU: 48 vs DRRIP: 48)">Burst-Interrupted Kernel</button>
-                                <button class="btn btn-preset" data-preset="matrix-stride" title="4-Set 48-block matrix tile with 64 streaming lines (Phase DQN: 123 misses vs LRU: 160 vs DRRIP: 161)">Multi-Set Matrix Stride</button>
+                                <button class="btn btn-preset active" data-preset="burst-kernel" title="12-block anchor kernel interrupted by 24 streaming lines">Burst-Interrupted Kernel</button>
+                                <button class="btn btn-preset" data-preset="dual-set-tile" title="24-block multi-set tile interrupted by 40 streaming lines">Dual-Set Tiled Stream</button>
+                                <button class="btn btn-preset" data-preset="compact-kernel" title="10-block compact loop interrupted by 20 streaming lines">Compact Kernel Scan</button>
+                                <button class="btn btn-preset" data-preset="deep-scan" title="12-block working set interrupted by 28 deep streaming lines">Deep Scan Recovery</button>
                             </div>
 
                             <div class="textarea-wrap">
