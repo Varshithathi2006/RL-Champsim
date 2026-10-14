@@ -732,7 +732,7 @@ function highlightCacheChip(setIdx, hitWayIdx, evictedWayIdx, isHit) {
     }
 }
 
-// Background parallel simulation for LRU and Random
+// Background parallel simulation for LRU baseline
 function simulateSecondaryLRU(setIndex, tag) {
     const ways = secondaryLruCache[setIndex];
     let isHit = false;
