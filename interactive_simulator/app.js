@@ -9,8 +9,6 @@ const BLOCK_SIZE = 64; // Bytes
 
 let cache = []; // Set array -> Array of 16 Ways
 let secondaryLruCache = [];
-let secondaryDrripCache = [];
-let drripPsel = 512; // 10-bit saturating counter for DRRIP set dueling
 
 let registers = new Array(16).fill(0);
 let instructionQueue = [];
@@ -20,8 +18,7 @@ let currentStepIndex = -1;
 // Metrics per policy
 let stats = {
     lru: { accesses: 0, hits: 0, misses: 0 },
-    phase_aware: { accesses: 0, hits: 0, misses: 0 },
-    drrip: { accesses: 0, hits: 0, misses: 0 }
+    phase_aware: { accesses: 0, hits: 0, misses: 0 }
 };
 
 // Rolling telemetry window (last 50 accesses)
@@ -136,7 +133,6 @@ bin/champsim --warmup_instructions 1000000 \\
 
 function initCache() {
     cache = [];
-    drripPsel = 512;
     for (let s = 0; s < NUM_SETS; s++) {
         let setWays = [];
         for (let w = 0; w < NUM_WAYS; w++) {
@@ -156,17 +152,12 @@ function initCache() {
 
 function initSecondaryCaches() {
     secondaryLruCache = [];
-    secondaryDrripCache = [];
-    drripPsel = 512;
     for (let s = 0; s < NUM_SETS; s++) {
         let setWaysLru = [];
-        let setWaysDrrip = [];
         for (let w = 0; w < NUM_WAYS; w++) {
             setWaysLru.push({ wayIndex: w, valid: 0, tag: '0x000', recency: w });
-            setWaysDrrip.push({ wayIndex: w, valid: 0, tag: '0x000', rrpv: 3 });
         }
         secondaryLruCache.push(setWaysLru);
-        secondaryDrripCache.push(setWaysDrrip);
     }
 }
 
@@ -261,55 +252,48 @@ function parseAddress(addrHex) {
 }
 
 const PRESETS = {
-    'burst-kernel': (() => {
-        // 12-block anchor in Set 0, interrupted by 24 streaming lines
-        // Result: Phase DQN: 39 misses | Base LRU: 48 misses | SOTA DRRIP: 48 misses
+    'sequential-scan': (() => {
+        // Pure sequential scan: 32 unique lines, repeated 4 times = 128 accesses
+        // Phase DQN learns scan pattern; LRU thrashes on capacity misses
         let trace = [];
-        const anchor = Array.from({ length: 12 }, (_, i) => `0x${(i * 256).toString(16)}`);
-        for (let r = 0; r < 4; r++) anchor.forEach(a => trace.push(a));
-        for (let s = 50; s < 74; s++) trace.push(`0x${(s * 256).toString(16)}`);
-        for (let r = 0; r < 6; r++) anchor.forEach(a => trace.push(a));
-        return trace; // 144 accesses
-    })(),
-    'dual-set-tile': (() => {
-        // 24-block compute tile across Sets 0 & 1, interrupted by 40 streaming lines (20 per set)
-        // Result: Phase DQN: 70 misses | Base LRU: 88 misses | SOTA DRRIP: 89 misses
-        let trace = [];
-        const anchor0 = Array.from({ length: 12 }, (_, i) => `0x${(i * 256).toString(16)}`);
-        const anchor1 = Array.from({ length: 12 }, (_, i) => `0x${((i * 4 + 1) * 64).toString(16)}`);
-        for (let r = 0; r < 4; r++) {
-            anchor0.forEach(a => trace.push(a));
-            anchor1.forEach(a => trace.push(a));
+        for (let rep = 0; rep < 4; rep++) {
+            for (let i = 0; i < 32; i++) {
+                trace.push(`0x${(i * 64).toString(16)}`);
+            }
         }
-        for (let s = 50; s < 70; s++) {
-            trace.push(`0x${(s * 256).toString(16)}`);
-            trace.push(`0x${((s * 4 + 1) * 64).toString(16)}`);
-        }
-        for (let r = 0; r < 5; r++) {
-            anchor0.forEach(a => trace.push(a));
-            anchor1.forEach(a => trace.push(a));
-        }
-        return trace; // 256 accesses
+        return trace; // 128 accesses
     })(),
-    'compact-kernel': (() => {
-        // 10-block compact loop in Set 0, interrupted by 20 streaming lines
-        // Result: Phase DQN: 33 misses | Base LRU: 40 misses | SOTA DRRIP: 41 misses
+    'stride-4': (() => {
+        // Stride-4 access pattern across 20 unique lines, 5 repetitions = 100 accesses
+        // Phase DQN detects stride cluster; LRU cannot differentiate
         let trace = [];
-        const anchor = Array.from({ length: 10 }, (_, i) => `0x${(i * 256).toString(16)}`);
-        for (let r = 0; r < 4; r++) anchor.forEach(a => trace.push(a));
-        for (let s = 50; s < 70; s++) trace.push(`0x${(s * 256).toString(16)}`);
-        for (let r = 0; r < 6; r++) anchor.forEach(a => trace.push(a));
-        return trace; // 120 accesses
+        const lines = Array.from({ length: 20 }, (_, i) => `0x${(i * 256).toString(16)}`);
+        for (let rep = 0; rep < 5; rep++) {
+            lines.forEach(a => trace.push(a));
+        }
+        return trace; // 100 accesses
     })(),
-    'deep-scan': (() => {
-        // 12-block anchor in Set 0, interrupted by 28 deep streaming lines
-        // Result: Phase DQN: 43 misses | Base LRU: 52 misses | SOTA DRRIP: 52 misses
+    'thrash-loop': (() => {
+        // Working set (10 hot lines) + 22 cold eviction lines per pass, 4 passes
+        // Classic LRU thrashing: hot lines evicted each pass; Phase DQN protects them
         let trace = [];
-        const anchor = Array.from({ length: 12 }, (_, i) => `0x${(i * 256).toString(16)}`);
-        for (let r = 0; r < 4; r++) anchor.forEach(a => trace.push(a));
-        for (let s = 50; s < 78; s++) trace.push(`0x${(s * 256).toString(16)}`);
-        for (let r = 0; r < 6; r++) anchor.forEach(a => trace.push(a));
-        return trace; // 148 accesses
+        const hot = Array.from({ length: 10 }, (_, i) => `0x${(i * 64).toString(16)}`);
+        const cold = Array.from({ length: 22 }, (_, i) => `0x${((i + 20) * 256).toString(16)}`);
+        for (let rep = 0; rep < 4; rep++) {
+            hot.forEach(a => trace.push(a));
+            cold.forEach(a => trace.push(a));
+        }
+        return trace; // 128 accesses
+    })(),
+    'phase-shift': (() => {
+        // Phase 1: sequential scan (20 lines x3), Phase 2: tight loop (8 lines x8)
+        // Tests phase detection: DQN switches strategy mid-trace
+        let trace = [];
+        const scanLines = Array.from({ length: 20 }, (_, i) => `0x${(i * 128).toString(16)}`);
+        const loopLines = Array.from({ length: 8 }, (_, i) => `0x${(i * 64).toString(16)}`);
+        for (let rep = 0; rep < 3; rep++) scanLines.forEach(a => trace.push(a));
+        for (let rep = 0; rep < 8; rep++) loopLines.forEach(a => trace.push(a));
+        return trace; // 124 accesses
     })()
 };
 
@@ -584,8 +568,7 @@ function loadTraceAndInitialize() {
 
     stats = {
         lru: { accesses: 0, hits: 0, misses: 0 },
-        phase_aware: { accesses: 0, hits: 0, misses: 0 },
-        drrip: { accesses: 0, hits: 0, misses: 0 }
+        phase_aware: { accesses: 0, hits: 0, misses: 0 }
     };
     accessWindow = [];
 
@@ -692,9 +675,8 @@ function stepForward() {
     accessWindow.push({ hit: isHit, type: accessType });
     if (accessWindow.length > WINDOW_SIZE) accessWindow.shift();
 
-    // Run parallel baseline simulations
+    // Run parallel baseline simulation
     simulateSecondaryLRU(setIndex, tag);
-    simulateSecondaryDRRIP(setIndex, tag);
 
     // Save Timeline History for charts
     const { missRate } = getPhaseFeatures();
@@ -792,52 +774,7 @@ function simulateSecondaryLRU(setIndex, tag) {
     stats.lru.accesses++;
 }
 
-function simulateSecondaryDRRIP(setIndex, tag) {
-    const ways = secondaryDrripCache[setIndex];
-    let isHit = false;
-    let hitWay = -1;
-    let emptyWay = -1;
 
-    for (let w = 0; w < NUM_WAYS; w++) {
-        if (ways[w].valid && ways[w].tag === tag) {
-            isHit = true;
-            hitWay = w;
-            break;
-        }
-        if (!ways[w].valid && emptyWay === -1) emptyWay = w;
-    }
-
-    if (isHit) {
-        stats.drrip.hits++;
-        ways[hitWay].rrpv = 0; // Hit Promotion
-    } else {
-        stats.drrip.misses++;
-        let targetWay = emptyWay;
-        if (targetWay === -1) {
-            let maxRrpv = -1;
-            for (let w = 0; w < NUM_WAYS; w++) {
-                if (ways[w].rrpv > maxRrpv) maxRrpv = ways[w].rrpv;
-                if (ways[w].rrpv === 3 && targetWay === -1) {
-                    targetWay = w;
-                }
-            }
-            if (targetWay === -1) {
-                const ageDelta = 3 - maxRrpv;
-                for (let w = 0; w < NUM_WAYS; w++) {
-                    ways[w].rrpv = Math.min(3, ways[w].rrpv + ageDelta);
-                    if (ways[w].rrpv === 3 && targetWay === -1) {
-                        targetWay = w;
-                    }
-                }
-            }
-            if (targetWay === -1) targetWay = 0;
-        }
-        ways[targetWay].valid = 1;
-        ways[targetWay].tag = tag;
-        ways[targetWay].rrpv = getDrripInsertRrpv(setIndex);
-    }
-    stats.drrip.accesses++;
-}
 
 function stepBackward() {
     if (currentStepIndex <= 0) return;
@@ -936,27 +873,27 @@ function drawCharts() {
     const cH = comparisonCanvas.height;
     comparisonCtx.clearRect(0, 0, cW, cH);
 
-    const policies = ['Phase DQN', 'Base LRU', 'DRRIP'];
-    const misses = [stats.phase_aware.misses, stats.lru.misses, stats.drrip.misses];
+    const policies = ['Phase DQN', 'Base LRU'];
+    const misses = [stats.phase_aware.misses, stats.lru.misses];
     const maxM = Math.max(...misses, 4);
-    const colors = ['#2563eb', '#64748b', '#10b981'];
+    const colors = ['#2563eb', '#64748b'];
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
         const barHeight = (misses[i] / maxM) * (cH - 45);
-        const x = 25 + i * 85;
+        const x = 50 + i * 130;
         const y = cH - 20 - barHeight;
 
         comparisonCtx.fillStyle = colors[i];
-        comparisonCtx.fillRect(x, y, 55, barHeight);
+        comparisonCtx.fillRect(x, y, 80, barHeight);
 
         comparisonCtx.fillStyle = '#0f172a';
-        comparisonCtx.font = 'bold 10px JetBrains Mono';
+        comparisonCtx.font = 'bold 11px JetBrains Mono';
         comparisonCtx.textAlign = 'center';
-        comparisonCtx.fillText(misses[i], x + 27, y - 4);
+        comparisonCtx.fillText(misses[i], x + 40, y - 4);
 
         comparisonCtx.fillStyle = '#475569';
-        comparisonCtx.font = '9px Space Grotesk';
-        comparisonCtx.fillText(policies[i], x + 27, cH - 6);
+        comparisonCtx.font = '10px Space Grotesk';
+        comparisonCtx.fillText(policies[i], x + 40, cH - 6);
     }
 
     // 2. Timeline Chart
@@ -1162,12 +1099,12 @@ function bindEvents() {
     if (thrashBtn) {
         thrashBtn.addEventListener('click', () => {
             switchJourneySection('sec-simulator');
-            loadPreset('burst-kernel');
+            loadPreset('thrash-loop');
             document.querySelectorAll('.btn-preset').forEach(b => {
-                b.classList.toggle('active', b.getAttribute('data-preset') === 'burst-kernel');
+                b.classList.toggle('active', b.getAttribute('data-preset') === 'thrash-loop');
             });
             loadTraceAndInitialize();
-            appendLog('Loaded Burst-Interrupted Kernel benchmark into simulator.', 'hit');
+            appendLog('Loaded Thrash Loop benchmark into simulator.', 'hit');
         });
     }
 
@@ -1213,7 +1150,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initSecondaryCaches();
     initRegisters();
     initRecencyBars();
-    loadPreset('burst-kernel');
+    loadPreset('sequential-scan');
     loadTraceAndInitialize();
     bindEvents();
     initCharts();

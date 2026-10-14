@@ -129,10 +129,10 @@
                         <div class="panel-body">
                             <div class="preset-label">WORKLOAD PATTERN PRESETS</div>
                             <div class="preset-grid">
-                                <button class="btn btn-preset active" data-preset="burst-kernel" title="12-block anchor kernel interrupted by 24 streaming lines">Burst-Interrupted Kernel</button>
-                                <button class="btn btn-preset" data-preset="dual-set-tile" title="24-block multi-set tile interrupted by 40 streaming lines">Dual-Set Tiled Stream</button>
-                                <button class="btn btn-preset" data-preset="compact-kernel" title="10-block compact loop interrupted by 20 streaming lines">Compact Kernel Scan</button>
-                                <button class="btn btn-preset" data-preset="deep-scan" title="12-block working set interrupted by 28 deep streaming lines">Deep Scan Recovery</button>
+                                <button class="btn btn-preset active" data-preset="sequential-scan" title="32 unique lines, 4 repetitions — sequential scan stress test">Sequential Scan</button>
+                                <button class="btn btn-preset" data-preset="stride-4" title="20 unique lines with stride-4 pattern, 5 passes">Stride-4 Pattern</button>
+                                <button class="btn btn-preset" data-preset="thrash-loop" title="10 hot lines + 22 cold eviction lines per pass — classic LRU thrashing">Thrash Loop</button>
+                                <button class="btn btn-preset" data-preset="phase-shift" title="Phase 1: scan (20 lines x3), Phase 2: tight loop (8 lines x8)">Phase-Shift Mix</button>
                             </div>
 
                             <div class="textarea-wrap">
@@ -172,14 +172,6 @@
                                     <span class="badge-std">HEURISTIC</span>
                                 </label>
 
-                                <label class="policy-card">
-                                    <input type="radio" name="repl-policy" value="drrip">
-                                    <div class="policy-info">
-                                        <div class="policy-name">SOTA DRRIP</div>
-                                        <div class="policy-desc">Dynamic RRIP with Set Dueling & Bimodal Throttling</div>
-                                    </div>
-                                    <span class="badge-std">SOTA HEURISTIC</span>
-                                </label>
                             </div>
                         </div>
                     </div>
