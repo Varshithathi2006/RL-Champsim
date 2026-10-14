@@ -252,48 +252,51 @@ function parseAddress(addrHex) {
 }
 
 const PRESETS = {
-    'sequential-scan': (() => {
-        // Pure sequential scan: 32 unique lines, repeated 4 times = 128 accesses
-        // Phase DQN learns scan pattern; LRU thrashes on capacity misses
+    'burst-kernel': (() => {
+        // 12-block anchor in Set 0, interrupted by 24 streaming lines
         let trace = [];
-        for (let rep = 0; rep < 4; rep++) {
-            for (let i = 0; i < 32; i++) {
-                trace.push(`0x${(i * 64).toString(16)}`);
-            }
-        }
-        return trace; // 128 accesses
+        const anchor = Array.from({ length: 12 }, (_, i) => `0x${(i * 256).toString(16)}`);
+        for (let r = 0; r < 4; r++) anchor.forEach(a => trace.push(a));
+        for (let s = 50; s < 74; s++) trace.push(`0x${(s * 256).toString(16)}`);
+        for (let r = 0; r < 6; r++) anchor.forEach(a => trace.push(a));
+        return trace; // 144 accesses
     })(),
-    'stride-4': (() => {
-        // Stride-4 access pattern across 20 unique lines, 5 repetitions = 100 accesses
-        // Phase DQN detects stride cluster; LRU cannot differentiate
+    'dual-set-tile': (() => {
+        // 24-block compute tile across Sets 0 & 1, interrupted by 40 streaming lines
         let trace = [];
-        const lines = Array.from({ length: 20 }, (_, i) => `0x${(i * 256).toString(16)}`);
-        for (let rep = 0; rep < 5; rep++) {
-            lines.forEach(a => trace.push(a));
+        const anchor0 = Array.from({ length: 12 }, (_, i) => `0x${(i * 256).toString(16)}`);
+        const anchor1 = Array.from({ length: 12 }, (_, i) => `0x${((i * 4 + 1) * 64).toString(16)}`);
+        for (let r = 0; r < 4; r++) {
+            anchor0.forEach(a => trace.push(a));
+            anchor1.forEach(a => trace.push(a));
         }
-        return trace; // 100 accesses
-    })(),
-    'thrash-loop': (() => {
-        // Working set (10 hot lines) + 22 cold eviction lines per pass, 4 passes
-        // Classic LRU thrashing: hot lines evicted each pass; Phase DQN protects them
-        let trace = [];
-        const hot = Array.from({ length: 10 }, (_, i) => `0x${(i * 64).toString(16)}`);
-        const cold = Array.from({ length: 22 }, (_, i) => `0x${((i + 20) * 256).toString(16)}`);
-        for (let rep = 0; rep < 4; rep++) {
-            hot.forEach(a => trace.push(a));
-            cold.forEach(a => trace.push(a));
+        for (let s = 50; s < 70; s++) {
+            trace.push(`0x${(s * 256).toString(16)}`);
+            trace.push(`0x${((s * 4 + 1) * 64).toString(16)}`);
         }
-        return trace; // 128 accesses
+        for (let r = 0; r < 5; r++) {
+            anchor0.forEach(a => trace.push(a));
+            anchor1.forEach(a => trace.push(a));
+        }
+        return trace; // 256 accesses
     })(),
-    'phase-shift': (() => {
-        // Phase 1: sequential scan (20 lines x3), Phase 2: tight loop (8 lines x8)
-        // Tests phase detection: DQN switches strategy mid-trace
+    'compact-kernel': (() => {
+        // 10-block compact loop in Set 0, interrupted by 20 streaming lines
         let trace = [];
-        const scanLines = Array.from({ length: 20 }, (_, i) => `0x${(i * 128).toString(16)}`);
-        const loopLines = Array.from({ length: 8 }, (_, i) => `0x${(i * 64).toString(16)}`);
-        for (let rep = 0; rep < 3; rep++) scanLines.forEach(a => trace.push(a));
-        for (let rep = 0; rep < 8; rep++) loopLines.forEach(a => trace.push(a));
-        return trace; // 124 accesses
+        const anchor = Array.from({ length: 10 }, (_, i) => `0x${(i * 256).toString(16)}`);
+        for (let r = 0; r < 4; r++) anchor.forEach(a => trace.push(a));
+        for (let s = 50; s < 70; s++) trace.push(`0x${(s * 256).toString(16)}`);
+        for (let r = 0; r < 6; r++) anchor.forEach(a => trace.push(a));
+        return trace; // 120 accesses
+    })(),
+    'deep-scan': (() => {
+        // 12-block anchor in Set 0, interrupted by 28 deep streaming lines
+        let trace = [];
+        const anchor = Array.from({ length: 12 }, (_, i) => `0x${(i * 256).toString(16)}`);
+        for (let r = 0; r < 4; r++) anchor.forEach(a => trace.push(a));
+        for (let s = 50; s < 78; s++) trace.push(`0x${(s * 256).toString(16)}`);
+        for (let r = 0; r < 6; r++) anchor.forEach(a => trace.push(a));
+        return trace; // 148 accesses
     })()
 };
 
@@ -1099,12 +1102,12 @@ function bindEvents() {
     if (thrashBtn) {
         thrashBtn.addEventListener('click', () => {
             switchJourneySection('sec-simulator');
-            loadPreset('thrash-loop');
+            loadPreset('burst-kernel');
             document.querySelectorAll('.btn-preset').forEach(b => {
-                b.classList.toggle('active', b.getAttribute('data-preset') === 'thrash-loop');
+                b.classList.toggle('active', b.getAttribute('data-preset') === 'burst-kernel');
             });
             loadTraceAndInitialize();
-            appendLog('Loaded Thrash Loop benchmark into simulator.', 'hit');
+            appendLog('Loaded Burst-Interrupted Kernel benchmark into simulator.', 'hit');
         });
     }
 
@@ -1150,7 +1153,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initSecondaryCaches();
     initRegisters();
     initRecencyBars();
-    loadPreset('sequential-scan');
+    loadPreset('burst-kernel');
     loadTraceAndInitialize();
     bindEvents();
     initCharts();
