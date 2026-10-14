@@ -13485,3 +13485,8 @@ const DQN_WEIGHTS = [
     ]
   }
 ];
+
+if (typeof window !== 'undefined') {
+  window.KMEANS_MODEL = KMEANS_MODEL;
+  window.DQN_WEIGHTS = DQN_WEIGHTS;
+}

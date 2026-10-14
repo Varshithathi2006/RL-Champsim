@@ -9,7 +9,8 @@ const BLOCK_SIZE = 64; // Bytes
 
 let cache = []; // Set array -> Array of 16 Ways
 let secondaryLruCache = [];
-let secondaryRandomCache = [];
+let secondaryDrripCache = [];
+let drripPsel = 512; // 10-bit saturating counter for DRRIP set dueling
 
 let registers = new Array(16).fill(0);
 let instructionQueue = [];
@@ -20,7 +21,7 @@ let currentStepIndex = -1;
 let stats = {
     lru: { accesses: 0, hits: 0, misses: 0 },
     phase_aware: { accesses: 0, hits: 0, misses: 0 },
-    random: { accesses: 0, hits: 0, misses: 0 }
+    drrip: { accesses: 0, hits: 0, misses: 0 }
 };
 
 // Rolling telemetry window (last 50 accesses)
@@ -135,6 +136,7 @@ bin/champsim --warmup_instructions 1000000 \\
 
 function initCache() {
     cache = [];
+    drripPsel = 512;
     for (let s = 0; s < NUM_SETS; s++) {
         let setWays = [];
         for (let w = 0; w < NUM_WAYS; w++) {
@@ -144,6 +146,7 @@ function initCache() {
                 tag: '0x000',
                 address: 0,
                 recency: w, // 0 = MRU, 15 = LRU initially
+                rrpv: 3,    // 2-bit RRPV: 0..3 (3 = distant initially)
                 accessCount: 0
             });
         }
@@ -153,16 +156,17 @@ function initCache() {
 
 function initSecondaryCaches() {
     secondaryLruCache = [];
-    secondaryRandomCache = [];
+    secondaryDrripCache = [];
+    drripPsel = 512;
     for (let s = 0; s < NUM_SETS; s++) {
         let setWaysLru = [];
-        let setWaysRand = [];
+        let setWaysDrrip = [];
         for (let w = 0; w < NUM_WAYS; w++) {
             setWaysLru.push({ wayIndex: w, valid: 0, tag: '0x000', recency: w });
-            setWaysRand.push({ wayIndex: w, valid: 0, tag: '0x000' });
+            setWaysDrrip.push({ wayIndex: w, valid: 0, tag: '0x000', rrpv: 3 });
         }
         secondaryLruCache.push(setWaysLru);
-        secondaryRandomCache.push(setWaysRand);
+        secondaryDrripCache.push(setWaysDrrip);
     }
 }
 
@@ -257,27 +261,39 @@ function parseAddress(addrHex) {
 }
 
 const PRESETS = {
-    sequential: Array.from({ length: 32 }, (_, i) => `0x${(i * 64).toString(16)}`),
-    stride: Array.from({ length: 32 }, (_, i) => `0x${(i * 256).toString(16)}`),
+    sequential: Array.from({ length: 64 }, (_, i) => `0x${(i * 64).toString(16)}`),
+    stride: Array.from({ length: 64 }, (_, i) => `0x${(i * 256).toString(16)}`),
     loop: (() => {
-        // 18 distinct block addresses into 4 sets (triggers heavy thrashing in targeted sets)
+        // 18 distinct block addresses mapping into Set 0, repeated across 8 loops (144 cycles)
+        // Causes complete 100% thrash failure in LRU while DRRIP and Phase DQN protect lines
         const baseAddresses = Array.from({ length: 18 }, (_, i) => i * 256);
         let trace = [];
-        for (let r = 0; r < 4; r++) {
+        for (let r = 0; r < 8; r++) {
             baseAddresses.forEach(addr => trace.push(`0x${addr.toString(16)}`));
         }
         return trace;
     })(),
     'phase-change': (() => {
         let trace = [];
-        // Phase 1: Sequential high-locality streaming
-        for (let i = 0; i < 18; i++) trace.push(`0x${(i * 64).toString(16)}`);
-        // Phase 2: Pointer chasing / scattered addresses
-        for (let i = 0; i < 20; i++) trace.push(`0x${(0x10000 + ((i * 137) % 64) * 256).toString(16)}`);
-        // Phase 3: Tight iterative kernel loop
-        const kernel = [0x2000, 0x2040, 0x2080, 0x20C0, 0x2100, 0x2140];
-        for (let r = 0; r < 4; r++) {
+        // Phase 0: Burst / Scan Phase (32 sequential compulsory stream)
+        for (let i = 0; i < 32; i++) trace.push(`0x${(i * 64).toString(16)}`);
+
+        // Phase 1: Mixed Irregular Pointer-Chasing (48 scattered addresses across sets)
+        for (let i = 0; i < 48; i++) {
+            const addr = 0x1000 + ((i * 137 + 17) % 64) * 64;
+            trace.push(`0x${addr.toString(16)}`);
+        }
+
+        // Phase 2: High-Temporal Reuse Iterative Kernel Loop (8 blocks repeated 6 times = 48 accesses)
+        const kernel = [0x2000, 0x2040, 0x2080, 0x20C0, 0x2100, 0x2140, 0x2180, 0x21C0];
+        for (let r = 0; r < 6; r++) {
             kernel.forEach(addr => trace.push(`0x${addr.toString(16)}`));
+        }
+
+        // Phase 3: Write-heavy buffer update stream (32 references)
+        for (let i = 0; i < 32; i++) {
+            const addr = 0x4000 + ((i * 31) % 16) * 256;
+            trace.push(`0x${addr.toString(16)}`);
         }
         return trace;
     })()
@@ -309,25 +325,28 @@ function getPhaseFeatures() {
 }
 
 function predictPhaseCluster(missRate, writeFrac, accessRate) {
-    if (!window.KMEANS_MODEL || !KMEANS_MODEL.scaler_mean) return 0;
+    const model = (typeof KMEANS_MODEL !== 'undefined' && KMEANS_MODEL && KMEANS_MODEL.scaler_mean)
+        ? KMEANS_MODEL
+        : (window.KMEANS_MODEL || null);
+    if (!model || !model.scaler_mean) return 0;
 
     const reuseFrac = 0.05;
     const raw = [missRate, writeFrac, reuseFrac, accessRate];
     const scaled = new Array(4);
 
     for (let i = 0; i < 4; i++) {
-        const mean = KMEANS_MODEL.scaler_mean[i];
-        const scale = KMEANS_MODEL.scaler_scale[i] > 1e-6 ? KMEANS_MODEL.scaler_scale[i] : 1.0;
+        const mean = model.scaler_mean[i];
+        const scale = model.scaler_scale[i] > 1e-6 ? model.scaler_scale[i] : 1.0;
         scaled[i] = (raw[i] - mean) / scale;
     }
 
     let bestCluster = 0;
     let minDist = Infinity;
 
-    for (let c = 0; c < KMEANS_MODEL.cluster_centers.length; c++) {
+    for (let c = 0; c < model.cluster_centers.length; c++) {
         let dist = 0;
         for (let i = 0; i < 4; i++) {
-            let diff = scaled[i] - KMEANS_MODEL.cluster_centers[c][i];
+            let diff = scaled[i] - model.cluster_centers[c][i];
             dist += diff * diff;
         }
         if (dist < minDist) {
@@ -339,7 +358,10 @@ function predictPhaseCluster(missRate, writeFrac, accessRate) {
 }
 
 function forwardDQN(inputVector) {
-    if (!window.DQN_WEIGHTS || DQN_WEIGHTS.length === 0) {
+    const weights = (typeof DQN_WEIGHTS !== 'undefined' && DQN_WEIGHTS && DQN_WEIGHTS.length > 0)
+        ? DQN_WEIGHTS
+        : (window.DQN_WEIGHTS || []);
+    if (!weights || weights.length === 0) {
         return Array.from({ length: 16 }, () => Math.random());
     }
 
@@ -361,9 +383,9 @@ function forwardDQN(inputVector) {
         return output;
     }
 
-    for (let i = 0; i < DQN_WEIGHTS.length; i++) {
-        const isLast = (i === DQN_WEIGHTS.length - 1);
-        activations = evaluateLayer(activations, DQN_WEIGHTS[i], !isLast);
+    for (let i = 0; i < weights.length; i++) {
+        const isLast = (i === weights.length - 1);
+        activations = evaluateLayer(activations, weights[i], !isLast);
     }
     return activations;
 }
@@ -371,8 +393,30 @@ function forwardDQN(inputVector) {
 function chooseVictimWay(setIndex, policy, accessTypeVal) {
     const ways = cache[setIndex];
 
-    if (policy === 'random') {
-        return Math.floor(Math.random() * NUM_WAYS);
+    if (policy === 'drrip') {
+        let victim = -1;
+        let maxRrpv = -1;
+        for (let w = 0; w < NUM_WAYS; w++) {
+            if (ways[w].rrpv > maxRrpv) maxRrpv = ways[w].rrpv;
+            if (ways[w].rrpv === 3 && victim === -1) {
+                victim = w;
+            }
+        }
+        if (victim === -1) {
+            const ageDelta = 3 - maxRrpv;
+            for (let w = 0; w < NUM_WAYS; w++) {
+                ways[w].rrpv = Math.min(3, ways[w].rrpv + ageDelta);
+                if (ways[w].rrpv === 3 && victim === -1) {
+                    victim = w;
+                }
+            }
+        }
+        const victimWay = (victim !== -1) ? victim : 0;
+        const targetDisplay = document.getElementById('target-way-display');
+        if (targetDisplay) {
+            targetDisplay.textContent = `Set 0x${setIndex.toString(16).toUpperCase()} · Way ${victimWay} (DRRIP RRPV: 3)`;
+        }
+        return victimWay;
     }
 
     if (policy === 'lru') {
@@ -384,6 +428,10 @@ function chooseVictimWay(setIndex, policy, accessTypeVal) {
                 lruWay = w;
             }
         }
+        const targetDisplay = document.getElementById('target-way-display');
+        if (targetDisplay) {
+            targetDisplay.textContent = `Set 0x${setIndex.toString(16).toUpperCase()} · Way ${lruWay} (LRU Rank 15)`;
+        }
         return lruWay;
     }
 
@@ -393,9 +441,11 @@ function chooseVictimWay(setIndex, policy, accessTypeVal) {
 
         // Update Phase Pill in Header
         const phasePill = document.getElementById('phase-display');
-        phasePill.textContent = `P${clusterId}`;
-        const phaseColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
-        phasePill.style.color = phaseColors[clusterId] || '#a855f7';
+        if (phasePill) {
+            phasePill.textContent = `P${clusterId}`;
+            const phaseColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
+            phasePill.style.color = phaseColors[clusterId] || '#a855f7';
+        }
 
         // 1. Build Recency feature (16 dims)
         const recencyNorm = new Array(NUM_WAYS);
@@ -418,27 +468,65 @@ function chooseVictimWay(setIndex, policy, accessTypeVal) {
         // Update Neural Deck in UI
         updateNeuralUI(recencyNorm, typeIdx, clusterId, clusterOneHot);
 
-        // Run neural forward pass
+        // Run neural forward pass with real pre-trained weights
         const qValues = forwardDQN(stateVector);
 
-        // Victim is way with maximum Q-value
-        let victimWay = 0;
+        // Argmax Q-value predicts TARGET RECENCY RANK (0..15, where 15 is oldest/LRU)
+        // Exactly matching ChampSim C++ phase_aware_rl::predict_victim_way
+        let targetRank = 0;
         let maxQ = -Infinity;
+        for (let r = 0; r < NUM_WAYS; r++) {
+            if (qValues[r] > maxQ) {
+                maxQ = qValues[r];
+                targetRank = r;
+            }
+        }
+
+        // Map predicted recency rank to the physical way currently holding that rank
+        let victimWay = 0;
+        let minDiff = 100;
         for (let w = 0; w < NUM_WAYS; w++) {
-            if (qValues[w] > maxQ) {
-                maxQ = qValues[w];
+            const diff = Math.abs(ways[w].recency - targetRank);
+            if (diff < minDiff) {
+                minDiff = diff;
                 victimWay = w;
             }
         }
 
-        // Update UI decision box
+        // Update UI decision box showing both Set and Way
         const targetDisplay = document.getElementById('target-way-display');
-        if (targetDisplay) targetDisplay.textContent = `Way ${victimWay} (Q: ${maxQ.toFixed(3)})`;
+        if (targetDisplay) {
+            targetDisplay.textContent = `Set 0x${setIndex.toString(16).toUpperCase()} · Way ${victimWay} (Rank: ${targetRank}, Q: ${maxQ.toFixed(3)})`;
+        }
 
         return victimWay;
     }
 
     return 0;
+}
+
+let drripAccessCounter = 0;
+
+function getDrripInsertRrpv(setIndex) {
+    drripAccessCounter++;
+    // Cycle-sampled set dueling for DRRIP (SRRIP vs BRRIP)
+    const sample = drripAccessCounter % 32;
+    if (sample === 0) {
+        // Dedicated SRRIP monitor
+        drripPsel = Math.min(1023, drripPsel + 1);
+        return 2;
+    } else if (sample === 1) {
+        // Dedicated BRRIP monitor
+        drripPsel = Math.max(0, drripPsel - 1);
+        return (Math.random() < 0.96) ? 3 : 2;
+    } else {
+        // Follower: follow winner of dueling
+        if (drripPsel >= 512) {
+            return (Math.random() < 0.96) ? 3 : 2;
+        } else {
+            return 2;
+        }
+    }
 }
 
 function updateNeuralUI(recencyNorm, typeIdx, clusterId, clusterOneHot) {
@@ -483,7 +571,7 @@ function loadTraceAndInitialize() {
     stats = {
         lru: { accesses: 0, hits: 0, misses: 0 },
         phase_aware: { accesses: 0, hits: 0, misses: 0 },
-        random: { accesses: 0, hits: 0, misses: 0 }
+        drrip: { accesses: 0, hits: 0, misses: 0 }
     };
     accessWindow = [];
 
@@ -557,7 +645,10 @@ function stepForward() {
     if (isHit) {
         stats[activePolicy].hits++;
         updateRecencyOnHit(setIndex, hitWayIdx);
-        appendLog(`[${activePolicy.toUpperCase()}] HIT on Set 0x${setIndex.toString(16)} / Way ${hitWayIdx} (Tag: ${tag})`, 'hit');
+        if (activePolicy === 'drrip') {
+            ways[hitWayIdx].rrpv = 0; // Hit Promotion
+        }
+        appendLog(`[${activePolicy.toUpperCase()}] HIT on Set 0x${setIndex.toString(16).toUpperCase()} / Way ${hitWayIdx} (Tag: ${tag})`, 'hit');
     } else {
         stats[activePolicy].misses++;
         if (emptyWayIdx !== -1) {
@@ -565,14 +656,20 @@ function stepForward() {
             ways[emptyWayIdx].tag = tag;
             ways[emptyWayIdx].address = addr;
             updateRecencyOnInsert(setIndex, emptyWayIdx);
-            appendLog(`[${activePolicy.toUpperCase()}] MISS (Compulsory). Filled Set 0x${setIndex.toString(16)} Way ${emptyWayIdx}`, 'miss');
+            if (activePolicy === 'drrip') {
+                ways[emptyWayIdx].rrpv = getDrripInsertRrpv(setIndex);
+            }
+            appendLog(`[${activePolicy.toUpperCase()}] MISS (Compulsory). Filled Set 0x${setIndex.toString(16).toUpperCase()} Way ${emptyWayIdx}`, 'miss');
         } else {
             evictedWayIdx = chooseVictimWay(setIndex, activePolicy, accessType);
             const oldTag = ways[evictedWayIdx].tag;
             ways[evictedWayIdx].tag = tag;
             ways[evictedWayIdx].address = addr;
             updateRecencyOnInsert(setIndex, evictedWayIdx);
-            appendLog(`[${activePolicy.toUpperCase()}] MISS & EVICT! Replaced Way ${evictedWayIdx} (Evicted: ${oldTag}, New: ${tag})`, 'miss');
+            if (activePolicy === 'drrip') {
+                ways[evictedWayIdx].rrpv = getDrripInsertRrpv(setIndex);
+            }
+            appendLog(`[${activePolicy.toUpperCase()}] MISS & EVICT! Replaced Set 0x${setIndex.toString(16).toUpperCase()} Way ${evictedWayIdx} (Evicted: ${oldTag}, New: ${tag})`, 'miss');
         }
     }
     stats[activePolicy].accesses++;
@@ -583,7 +680,7 @@ function stepForward() {
 
     // Run parallel baseline simulations
     simulateSecondaryLRU(setIndex, tag);
-    simulateSecondaryRandom(setIndex, tag);
+    simulateSecondaryDRRIP(setIndex, tag);
 
     // Save Timeline History for charts
     const { missRate } = getPhaseFeatures();
@@ -681,28 +778,51 @@ function simulateSecondaryLRU(setIndex, tag) {
     stats.lru.accesses++;
 }
 
-function simulateSecondaryRandom(setIndex, tag) {
-    const ways = secondaryRandomCache[setIndex];
+function simulateSecondaryDRRIP(setIndex, tag) {
+    const ways = secondaryDrripCache[setIndex];
     let isHit = false;
+    let hitWay = -1;
     let emptyWay = -1;
 
     for (let w = 0; w < NUM_WAYS; w++) {
         if (ways[w].valid && ways[w].tag === tag) {
             isHit = true;
+            hitWay = w;
             break;
         }
         if (!ways[w].valid && emptyWay === -1) emptyWay = w;
     }
 
     if (isHit) {
-        stats.random.hits++;
+        stats.drrip.hits++;
+        ways[hitWay].rrpv = 0; // Hit Promotion
     } else {
-        stats.random.misses++;
-        const target = (emptyWay !== -1) ? emptyWay : Math.floor(Math.random() * NUM_WAYS);
-        ways[target].valid = 1;
-        ways[target].tag = tag;
+        stats.drrip.misses++;
+        let targetWay = emptyWay;
+        if (targetWay === -1) {
+            let maxRrpv = -1;
+            for (let w = 0; w < NUM_WAYS; w++) {
+                if (ways[w].rrpv > maxRrpv) maxRrpv = ways[w].rrpv;
+                if (ways[w].rrpv === 3 && targetWay === -1) {
+                    targetWay = w;
+                }
+            }
+            if (targetWay === -1) {
+                const ageDelta = 3 - maxRrpv;
+                for (let w = 0; w < NUM_WAYS; w++) {
+                    ways[w].rrpv = Math.min(3, ways[w].rrpv + ageDelta);
+                    if (ways[w].rrpv === 3 && targetWay === -1) {
+                        targetWay = w;
+                    }
+                }
+            }
+            if (targetWay === -1) targetWay = 0;
+        }
+        ways[targetWay].valid = 1;
+        ways[targetWay].tag = tag;
+        ways[targetWay].rrpv = getDrripInsertRrpv(setIndex);
     }
-    stats.random.accesses++;
+    stats.drrip.accesses++;
 }
 
 function stepBackward() {
@@ -802,10 +922,10 @@ function drawCharts() {
     const cH = comparisonCanvas.height;
     comparisonCtx.clearRect(0, 0, cW, cH);
 
-    const policies = ['Phase DQN', 'Base LRU', 'Random'];
-    const misses = [stats.phase_aware.misses, stats.lru.misses, stats.random.misses];
+    const policies = ['Phase DQN', 'Base LRU', 'DRRIP'];
+    const misses = [stats.phase_aware.misses, stats.lru.misses, stats.drrip.misses];
     const maxM = Math.max(...misses, 4);
-    const colors = ['#2563eb', '#64748b', '#ef4444'];
+    const colors = ['#2563eb', '#64748b', '#10b981'];
 
     for (let i = 0; i < 3; i++) {
         const barHeight = (misses[i] / maxM) * (cH - 45);

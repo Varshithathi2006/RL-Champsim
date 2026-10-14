@@ -36,3 +36,4 @@ compile_commands.json
 *.aux
 *.log
 *.out
+scratch/
