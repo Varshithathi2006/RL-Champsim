@@ -216,7 +216,7 @@
                                     <strong id="stat-rolling-miss">0.00</strong>
                                 </div>
                                 <div class="sub-metric">
-                                    <span>Write Ratio ($W_t$):</span>
+                                    <span>Write Ratio (W<sub>t</sub>):</span>
                                     <strong id="stat-write-frac">0.00</strong>
                                 </div>
                                 <div class="sub-metric">
@@ -238,7 +238,7 @@
                                 <span class="panel-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></span>
                                 <span class="panel-title">CPU GENERAL PURPOSE REGISTERS</span>
                             </div>
-                            <span class="head-tag">16-Register Bank ($g_0-g_{15}$)</span>
+                            <span class="head-tag">16-Register Bank (g0 – g15)</span>
                         </div>
                         <div class="panel-body">
                             <div class="registers-grid" id="registers-bank">
@@ -451,7 +451,7 @@
                             <span class="th-badge bg-cyan">OUR SOLUTION</span>
                             <h3>Phase-Aware DQN (AURA-Cache)</h3>
                         </div>
-                        <p><strong>The Principle:</strong> Offline Q-learning supervised by Belady's optimal oracle, dynamically augmented with online $K=4$ KMeans phase clustering.</p>
+                        <p><strong>The Principle:</strong> Offline Q-learning supervised by Belady's optimal oracle, dynamically augmented with online K = 4 KMeans phase clustering.</p>
                         <p class="th-flaw text-cyan"><strong>The Advantage:</strong> Detects scan phases to aggressively bypass or discard non-reusable lines, while preserving high-temporal lines during loop phases.</p>
                         <div class="th-stat">
                             <span>Belady Match Accuracy:</span>
@@ -493,7 +493,7 @@
             <div class="section-container">
                 <div class="sec-header">
                     <span class="sec-badge">JOURNEY STEP 03</span>
-                    <h2>Workload Phase Discovery & KMeans Clustering ($K=4$)</h2>
+                    <h2>Workload Phase Discovery & KMeans Clustering (K = 4)</h2>
                     <p>Applications are not static. Memory access patterns exhibit distinct macroscopic operational phases requiring different replacement policies.</p>
                 </div>
 
@@ -551,31 +551,31 @@
                             <div class="pm-row"><span>Read Ratio:</span> <strong>High Writes</strong></div>
                             <div class="pm-row"><span>Working Set:</span> <strong>Pointer-Chasing</strong></div>
                         </div>
-                        <p class="p-behavior">Graph traversal, tree lookups, or indirect memory references ($A[B[i]]$) with weak spatial correlation.</p>
+                        <p class="p-behavior">Graph traversal, tree lookups, or indirect memory references (<em>A</em>[<em>B</em>[<em>i</em>]]) with weak spatial correlation.</p>
                         <div class="p-action"><strong>DQN Strategy:</strong> Adaptive hybrid ranking favoring age and insertion time over pure recency.</div>
                     </div>
                 </div>
 
                 <!-- Phase Telemetry Features Diagram -->
                 <div class="feature-engineering-card card-glass">
-                    <h3>Online Telemetry Vector Extraction ($4 \text{ Features}$)</h3>
-                    <p>ChampSim hardware instrumentation monitors a sliding rolling window of $50$ memory references without profiling overhead:</p>
+                    <h3>Online Telemetry Vector Extraction (4 Features)</h3>
+                    <p>ChampSim hardware instrumentation monitors a sliding rolling window of 50 memory references without profiling overhead:</p>
                     <div class="features-equation-grid">
                         <div class="eq-box">
-                            <div class="eq-title">1. Rolling Miss Rate ($M_t$)</div>
-                            <code>M_t = \frac{\text{Misses within last 50 accesses}}{50}</code>
+                            <div class="eq-title">1. Rolling Miss Rate (<em>M</em><sub>t</sub>)</div>
+                            <code><em>M</em><sub>t</sub> = (Misses within last 50 accesses) / 50</code>
                         </div>
                         <div class="eq-box">
-                            <div class="eq-title">2. Rolling Read Ratio ($R_t$)</div>
-                            <code>R_t = \frac{\text{LOAD references within last 50}}{50}</code>
+                            <div class="eq-title">2. Rolling Read Ratio (<em>R</em><sub>t</sub>)</div>
+                            <code><em>R</em><sub>t</sub> = (LOAD references within last 50) / 50</code>
                         </div>
                         <div class="eq-box">
-                            <div class="eq-title">3. Reuse Fraction ($U_t$)</div>
-                            <code>U_t = \frac{\text{Re-referenced cache blocks}}{50}</code>
+                            <div class="eq-title">3. Reuse Fraction (<em>U</em><sub>t</sub>)</div>
+                            <code><em>U</em><sub>t</sub> = (Re-referenced cache blocks) / 50</code>
                         </div>
                         <div class="eq-box">
-                            <div class="eq-title">4. Access Intensity ($I_t$)</div>
-                            <code>I_t = \frac{\text{Access Count}}{\text{Elapsed Cycles}}</code>
+                            <div class="eq-title">4. Access Intensity (<em>I</em><sub>t</sub>)</div>
+                            <code><em>I</em><sub>t</sub> = (Access Count) / (Elapsed Cycles)</code>
                         </div>
                     </div>
                 </div>
@@ -595,12 +595,12 @@
 
                 <!-- 28-dim State Space Anatomy -->
                 <div class="tensor-anatomy-card card-glass">
-                    <h3>State Vector Formulation: $S_t \in \mathbb{R}^{28}$</h3>
+                    <h3>State Vector Formulation: <em>S</em><sub>t</sub> &isin; &#8477;<sup>28</sup> (28 Dimensions)</h3>
                     <div class="tensor-blocks-grid">
                         <div class="t-block tb-recency">
                             <div class="tb-head">Dimensions 0..15 (16 Values)</div>
                             <div class="tb-title">Normalized Way Recency Ranks</div>
-                            <p>For each way $w \in [0, 15]$ in the cache set: $r_w / 15.0$, where $0.0 = \text{MRU}$ (most recent) and $1.0 = \text{LRU}$ (least recent).</p>
+                            <p>For each way <em>w</em> &isin; [0, 15] in the cache set: <em>r</em><sub><em>w</em></sub> / 15.0, where 0.0 = MRU (most recent) and 1.0 = LRU (least recent).</p>
                         </div>
                         <div class="t-block tb-type">
                             <div class="tb-head">Dimensions 16..23 (8 Values)</div>
@@ -610,7 +610,7 @@
                         <div class="t-block tb-phase">
                             <div class="tb-head">Dimensions 24..27 (4 Values)</div>
                             <div class="tb-title">KMeans Cluster One-Hot Vector</div>
-                            <p>The online predicted workload phase cluster from Section 3: $[1,0,0,0]$ through $[0,0,0,1]$. Provides macroscopic context.</p>
+                            <p>The online predicted workload phase cluster from Section 3: [1, 0, 0, 0] through [0, 0, 0, 1]. Provides macroscopic context.</p>
                         </div>
                     </div>
                 </div>
@@ -622,32 +622,32 @@
                         <div class="topo-layer">
                             <span class="layer-pill">INPUT LAYER</span>
                             <div class="topo-name">28 Neurons</div>
-                            <div class="topo-sub">State vector $S_t$</div>
+                            <div class="topo-sub">State vector <em>S</em><sub>t</sub></div>
                         </div>
                         <div class="topo-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
                         <div class="topo-layer">
                             <span class="layer-pill">DENSE 1</span>
                             <div class="topo-name">64 Neurons + ReLU</div>
-                            <div class="topo-sub">$28 \times 64 = 1,792$ weights</div>
+                            <div class="topo-sub">28 &times; 64 = 1,792 weights</div>
                         </div>
                         <div class="topo-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
                         <div class="topo-layer">
                             <span class="layer-pill">DENSE 2</span>
                             <div class="topo-name">32 Neurons + ReLU</div>
-                            <div class="topo-sub">$64 \times 32 = 2,048$ weights</div>
+                            <div class="topo-sub">64 &times; 32 = 2,048 weights</div>
                         </div>
                         <div class="topo-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
                         <div class="topo-layer topo-out">
                             <span class="layer-pill bg-cyan">OUTPUT LAYER</span>
                             <div class="topo-name">16 Q-Values</div>
-                            <div class="topo-sub">$32 \times 16 = 512$ weights</div>
+                            <div class="topo-sub">32 &times; 16 = 512 weights</div>
                         </div>
                     </div>
 
                     <div class="decision-math-box">
                         <div class="math-left">
                             <strong>Policy Eviction Rule:</strong>
-                            <code>\text{Victim Way} = \arg\max_{w \in [0, 15]} Q(S_t, w; \theta)</code>
+                            <code>Victim Way = argmax<sub><em>w</em> &isin; [0, 15]</sub> <em>Q</em>(<em>S</em><sub>t</sub>, <em>w</em>; &theta;)</code>
                         </div>
                         <div class="math-right">
                             <span>Total Storage:</span>
