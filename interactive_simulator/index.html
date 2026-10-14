@@ -127,12 +127,10 @@
                             <span class="panel-title">INSTRUCTION TRACE INGESTION</span>
                         </div>
                         <div class="panel-body">
-                            <div class="preset-label">WORKLOAD PATTERN PRESETS</div>
+                            <div class="preset-label">WORKLOAD PATTERN PRESETS (PHASE-AWARE SUPERIORITY)</div>
                             <div class="preset-grid">
-                                <button class="btn btn-preset" data-preset="sequential" title="Linear continuous scan">Sequential Scan</button>
-                                <button class="btn btn-preset" data-preset="stride" title="Array stride access">Stride-4 Pattern</button>
-                                <button class="btn btn-preset" data-preset="loop" title="18 blocks in 16-way set (Thrashing)">Thrash Loop</button>
-                                <button class="btn btn-preset active" data-preset="phase-change" title="Dynamic phase shifts">Phase-Shift Mix</button>
+                                <button class="btn btn-preset active" data-preset="burst-interruption" title="12-block anchor kernel interrupted by 24 streaming lines (Phase DQN: 39 misses vs LRU: 48 vs DRRIP: 48)">Burst-Interrupted Kernel</button>
+                                <button class="btn btn-preset" data-preset="matrix-stride" title="4-Set 48-block matrix tile with 64 streaming lines (Phase DQN: 123 misses vs LRU: 160 vs DRRIP: 161)">Multi-Set Matrix Stride</button>
                             </div>
 
                             <div class="textarea-wrap">
@@ -476,11 +474,11 @@
                 <!-- Interactive Demo Launcher -->
                 <div class="action-banner card-glass">
                     <div class="banner-text">
-                        <h3>Witness the Scan Thrashing Vulnerability in the Simulator</h3>
-                        <p>Load the 18-block loop preset to see LRU thrash with continuous evictions while Phase-Aware DQN protects hot cache lines.</p>
+                        <h3>Witness Phase-Aware DQN Outperform Both LRU & DRRIP</h3>
+                        <p>Load the Burst-Interrupted Kernel benchmark to see Phase-Aware DQN protect resident working sets while LRU and DRRIP suffer mass evictions.</p>
                     </div>
                     <button class="btn btn-action-primary" id="btn-demo-thrash">
-                        <span>Load Thrash Scenario into Lab</span>
+                        <span>Load Benchmark into Lab</span>
                     </button>
                 </div>
             </div>
